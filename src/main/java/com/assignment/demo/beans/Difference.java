@@ -1,6 +1,7 @@
 package com.assignment.demo.beans;
 
 import javax.persistence.*;
+import java.util.Objects;
 
 @Entity
 @Table(name = "diferences")
@@ -34,5 +35,19 @@ public class Difference {
 
     public void setExist(boolean exist) {
         this.exist = exist;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Difference that = (Difference) o;
+        return exist == that.exist &&
+                Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, exist);
     }
 }

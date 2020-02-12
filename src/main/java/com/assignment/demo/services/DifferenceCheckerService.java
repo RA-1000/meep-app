@@ -11,13 +11,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Service
@@ -32,15 +30,9 @@ public class DifferenceCheckerService {
     private final Logger log = LoggerFactory.getLogger(LoggingAspect.class);
 
     public List<Difference> check() {
-        /*
-        llamar finder force;
-        ver si existen:
-
-        add to db, pisar finder
-         */
         List<Difference> differences = new ArrayList<>();
         try {
-
+            //check both list to compare
             Future<List<Carrier>> nCarriersTask = promiseMaker.submit(
                     () -> carrierFinderRepository.retrieveCarriersForced());
             Future<List<Carrier>> oCarriersTask = promiseMaker.submit(
@@ -50,21 +42,21 @@ public class DifferenceCheckerService {
             List<Carrier> nCarriers = nCarriersTask.get();
 
             if (oCarriers == null || oCarriers.isEmpty()) {
-                //mode first time.
+                //mode first time. Store the new, everything is different
                 nCarriers.stream().forEach(carrier -> {
                     differences.add(new Difference(carrier.getFid(), true));
                 });
                 promiseMaker.execute(() ->
                         carrierFinderRepository.addCarriers(nCarriers));
             } else {
-                //nexts
+                //compares both lists. add new ones.
                 nCarriers.stream().forEach(carrier -> {
                     if (!oCarriers.contains(carrier)) {
                         differences.add(new Difference(carrier.getFid(), true));
                         promiseMaker.execute(() -> carrierFinderRepository.addCarrier(carrier));
                     }
                 });
-
+                //mark and remove old ones that no longer exists
                 if (oCarriers.removeAll(nCarriers)) {
                     oCarriers.stream().forEach(carrier -> {
                         differences.add(new Difference(carrier.getFid(), false));
@@ -72,6 +64,7 @@ public class DifferenceCheckerService {
                     promiseMaker.execute(() -> carrierFinderRepository.deleteAll(oCarriers));
                 }
             }
+            //storage
             promiseMaker.submit(() -> {
                 differenceCheckerRepository.deleteAll();
                 differenceCheckerRepository.addDifference(differences);
@@ -81,6 +74,7 @@ public class DifferenceCheckerService {
         } catch (ExecutionException e) {
             log.error("Process interrupted", e);
         }
+        //just wait for everything to set up.
         while (((ThreadPoolExecutor) promiseMaker).getActiveCount() > 0) ;
         return differences;
     }
